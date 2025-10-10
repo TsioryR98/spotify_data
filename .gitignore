@@ -1,0 +1,9 @@
+.env
+airflow.cfg
+airflow.db
+/logs
+/plugins
+__pycache__
+dags/__pycache__
+dags/utils/__pycache__
+data/

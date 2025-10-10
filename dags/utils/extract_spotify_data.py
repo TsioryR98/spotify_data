@@ -53,7 +53,19 @@ def extract_spotify_data(
 
                         current_date = datetime.now().strftime("%Y-%m-%d")
                         filename = os.path.join(subdir, f"{current_date}.csv")
+
+                        # CSV output
                         df.to_csv(filename, index=False)
+
+                        # JSON output
+                        json_path = os.path.join(subdir, f"{current_date}.json")
+                        df.to_json(
+                            json_path,
+                            orient="records",
+                            lines=False,
+                            indent=2,
+                            force_ascii=False,
+                        )
 
                         logging.info(f"{search_type.upper()} data for {market}")
 
