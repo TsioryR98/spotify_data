@@ -2,7 +2,7 @@ from airflow import DAG
 from datetime import datetime
 import os
 
-from utils.extract_spotify_data import extract_spotify_data
+from dags.utils.extract_album_data import extract_album_data
 from utils.request_auth_api import request_auth_api
 
 from dotenv import load_dotenv
@@ -31,10 +31,10 @@ with DAG(
 ) as dag:
     token = request_auth_api(CLIENT_ID, CLIENT_SECRET)
 
-    extract = extract_spotify_data(
+    extract = extract_album_data(
         token=token,
         time_range="2015-2025",
-        types=["track", "album"],
+        types="album",
         markets=["US", "FR", "DE", "CA", "BR", "JP", "GB"],
         output_dir=BASE_OUTPUT_DIR,
     )
