@@ -2,7 +2,7 @@ from airflow import DAG
 from datetime import datetime
 import os
 
-from dags.utils.extract_album_data import extract_album_data
+from utils.extract_album_data import extract_album_data
 from utils.request_auth_api import request_auth_api
 
 from dotenv import load_dotenv
