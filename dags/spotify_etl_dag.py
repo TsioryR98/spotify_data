@@ -4,6 +4,7 @@ import os
 
 from utils.extract_album_data import extract_album_data
 from utils.request_auth_api import request_auth_api
+from utils.extract_album_details import extract_album_details
 
 from dotenv import load_dotenv
 
@@ -38,4 +39,11 @@ with DAG(
         markets=["US", "FR", "DE", "CA", "BR", "JP", "GB"],
         output_dir=BASE_OUTPUT_DIR,
     )
-    token >> extract
+
+    extract_details = extract_album_details(
+        token=token,
+        markets=["US", "FR", "DE", "CA", "BR", "JP", "GB"],
+        output_dir=BASE_OUTPUT_DIR,
+    )
+
+    token >> extract >> extract_details
