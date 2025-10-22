@@ -21,10 +21,11 @@ def extract_album_details(
     """
     try:
         for market in markets:
-            subdir = os.path.join(output_dir, "data", "raw")
-            market_path = discover_album_data(subdir, market)
+            # subdir = os.path.join(output_dir, "data", "raw")
             df = pd.read_csv(
-                os.path.join(market_path, "search_album.csv")
+                os.path.join(
+                    discover_album_data(output_dir, market), "search_album.csv"
+                )
             )  # read csv file with pandas
 
             album_list_id = df["album_id"].tolist()
