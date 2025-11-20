@@ -36,7 +36,7 @@ def extract_album_details(
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                 }
-                response = requests.get(url, headers=headers, timeout=10)
+                response = requests.get(url, headers=headers, timeout=30)
                 response.raise_for_status()
 
                 data = response.json()

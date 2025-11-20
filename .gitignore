@@ -8,3 +8,4 @@ dags/__pycache__
 dags/utils/__pycache__
 data/
 discover.txt
+latest_folders.txt
