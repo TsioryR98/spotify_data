@@ -3,95 +3,110 @@ from typing import List
 import os
 import pandas as pd
 from datetime import datetime
-
-
 import requests
 from airflow.decorators import task
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.discover_album_data import discover_album_data
+
+
+def fetch_album_data(album_id: str, token: str) -> dict:
+    """Fetch album data from Spotify API."""
+    url = f"https://api.spotify.com/v1/albums/{album_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    response = requests.get(url, headers=headers, timeout=30)
+    response.raise_for_status()
+    return response.json()
 
 
 @task
 def extract_album_details(
-    token: str,
-    markets: List[str],
-    output_dir: str,
+    token: str, markets: List[str], output_dir: str, max_workers: int = 10
 ) -> bool:
     """
-    Extract data for each album and ids from spotify
+    Extract data for each album and ids from Spotify in parallel.
+    Saves album details, tracks, and artists CSV per market/date.
     """
     try:
         for market in markets:
-            # subdir = os.path.join(output_dir, "data", "raw")
-            df = pd.read_csv(
-                os.path.join(
-                    discover_album_data(output_dir, market), "search_album.csv"
-                )
-            )  # read csv file with pandas
+            logging.info(f"Processing market: {market}")
 
+            # Read album IDs
+            csv_path = os.path.join(
+                discover_album_data(output_dir, market), "search_album.csv"
+            )
+            df = pd.read_csv(csv_path)
             album_list_id = df["album_id"].tolist()
 
-            for id in album_list_id:
-                url = f"https://api.spotify.com/v1/albums/{id}"
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                }
-                response = requests.get(url, headers=headers, timeout=30)
-                response.raise_for_status()
+            # Accumulate results
+            album_details, album_tracks, album_artists = [], [], []
 
-                data = response.json()
-                album_details = []
-                album_tracks = []
-                album_artists = []
+            # Fetch album data in parallel
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(fetch_album_data, album_id, token)
+                    for album_id in album_list_id
+                ]
+                for future in as_completed(futures):
+                    data = future.result()
 
-                # album detail format
-                album_detail = {
-                    "id": data["id"],
-                    "album_type": data["album_type"],
-                    "total_tracks": data["total_tracks"],
-                    "name": data["name"],
-                    "release_date": data["release_date"],
-                    "popularity": data["popularity"],
-                }
-                album_details.append(album_detail)
-                # album tracks format
-                album_id = data["id"]
-                total_track = data["tracks"]["total"]
-                for track in data["tracks"]["items"]:
-                    album_track = {
-                        "id": album_id,
-                        "track_id": track["id"],
-                        "duration_ms": track["duration_ms"],
-                        "name": track["name"],
-                        "disc_number": track["disc_number"],
-                        "total": total_track,
-                    }
-                    album_tracks.append(album_track)
-                # album tracks format
-                for artist in data["artists"]:
-                    album_artist = {
-                        "id": album_id,
-                        "artist_id": artist["id"],
-                        "artist_name": artist["name"],
-                    }
-                    album_artists.append(album_artist)
+                    # Album details
+                    album_details.append(
+                        {
+                            "id": data["id"],
+                            "album_type": data["album_type"],
+                            "total_tracks": data["total_tracks"],
+                            "name": data["name"],
+                            "release_date": data["release_date"],
+                            "popularity": data["popularity"],
+                        }
+                    )
 
-        df_album_details = pd.DataFrame(album_details)
-        df_album_tracks = pd.DataFrame(album_tracks)
-        df_album_artists = pd.DataFrame(album_artists)
+                    # Tracks
+                    total_tracks = data["tracks"]["total"]
+                    for track in data["tracks"]["items"]:
+                        album_tracks.append(
+                            {
+                                "id": data["id"],
+                                "track_id": track["id"],
+                                "duration_ms": track["duration_ms"],
+                                "name": track["name"],
+                                "disc_number": track["disc_number"],
+                                "total": total_tracks,
+                            }
+                        )
 
-        current_date = datetime.now().strftime("%Y-%m-%d")
+                    # Artists
+                    for artist in data["artists"]:
+                        album_artists.append(
+                            {
+                                "id": data["id"],
+                                "artist_id": artist["id"],
+                                "artist_name": artist["name"],
+                            }
+                        )
 
-        subdir = os.path.join(output_dir, "data", "raw", market, current_date)
-        os.makedirs(subdir, exist_ok=True)
+            # Save CSVs per market/date
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            subdir = os.path.join(output_dir, "data", "raw", market, current_date)
+            os.makedirs(subdir, exist_ok=True)
 
-        df_album_details.to_csv(subdir, "albums_details.csv", index=False)
-        df_album_tracks.to_csv(subdir, "df_album_tracks.csv", index=False)
-        df_album_artists.to_csv(subdir, "df_album_artists.csv", index=False)
+            pd.DataFrame(album_details).to_csv(
+                os.path.join(subdir, "albums_details.csv"), index=False
+            )
+            pd.DataFrame(album_tracks).to_csv(
+                os.path.join(subdir, "albums_tracks.csv"), index=False
+            )
+            pd.DataFrame(album_artists).to_csv(
+                os.path.join(subdir, "albums_artists.csv"), index=False
+            )
 
-        logging.info(f"data for {market} done")
+            logging.info(f"Market {market} done. Data saved in {subdir}")
+
+        return True
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"error for extracting : {str(e)}")
-
+        logging.error(f"Error extracting album data: {str(e)}")
         return False
